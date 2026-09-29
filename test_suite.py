@@ -12,7 +12,11 @@ sys.path.insert(0, BASE_DIR)
 
 from utils.preprocessing import clean_text, train_fake_news_classifier, predict_news, load_model
 from utils.graph_utils import generate_default_social_network, get_graph_metrics, validate_source_target
-from algorithms.propagation import simulate_bfs_propagation
+from algorithms.propagation import (
+    simulate_bfs_propagation,
+    simulate_dfs_propagation,
+    simulate_propagation
+)
 from algorithms.pagerank import compute_pagerank
 from algorithms.centrality import compute_betweenness_centrality
 from algorithms.dominating_set import compute_approx_dominating_set
@@ -64,6 +68,23 @@ class TestFakeNewsProject(unittest.TestCase):
         self.assertGreater(res['affected_count'], 1)
         self.assertEqual(res['source'], "User1")
         self.assertIn("User1", res['affected_users'])
+        self.assertEqual(res['algorithm'], "BFS")
+        
+    def test_dfs_propagation(self):
+        res = simulate_dfs_propagation(self.G, source="User1", max_steps=4)
+        self.assertTrue(res['success'])
+        self.assertGreater(res['affected_count'], 1)
+        self.assertEqual(res['source'], "User1")
+        self.assertIn("User1", res['affected_users'])
+        self.assertEqual(res['algorithm'], "DFS")
+        
+    def test_unified_propagation_selection(self):
+        bfs_res = simulate_propagation(self.G, source="User1", algorithm="BFS", max_steps=3)
+        dfs_res = simulate_propagation(self.G, source="User1", algorithm="DFS", max_steps=3)
+        self.assertEqual(bfs_res['algorithm'], "BFS")
+        self.assertEqual(dfs_res['algorithm'], "DFS")
+        self.assertGreater(bfs_res['affected_count'], 0)
+        self.assertGreater(dfs_res['affected_count'], 0)
         
     def test_pagerank(self):
         pr_res = compute_pagerank(self.G, top_k=5)

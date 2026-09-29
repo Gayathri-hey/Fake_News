@@ -153,7 +153,10 @@ Where:
 
 ---
 
-## 11. Algorithm 1: Breadth-First Search (BFS) Propagation
+## 11. Algorithm 1: Information Propagation (BFS and DFS)
+Users can dynamically select between two foundational traversal paradigms via the interface dropdown:
+
+### 11.1 Breadth-First Search (BFS) Propagation
 - **Mathematical / Procedural Formulation:**
   Given source $s \in V$ and maximum depth $k$:
   1. Initialize queue $Q \leftarrow [s]$, visited set $S \leftarrow \{s\}$, and level map $L(s) = 0$.
@@ -163,7 +166,18 @@ Where:
        - $S \leftarrow S \cup \{v\}$
        - $L(v) \leftarrow L(u) + 1$
        - Enqueue $v$ to $Q$.
-- **Purpose:** Tracks exact level-by-level cascade wavefronts (Time 0, Time 1, Time 2, etc.) and calculates total affected user counts.
+- **Diffusion Model:** Simulates **concurrent, epidemic broadcasting** where misinformation spreads simultaneously to all direct contacts in expanding concentric wavefronts.
+
+### 11.2 Depth-First Search (DFS) Propagation
+- **Mathematical / Procedural Formulation:**
+  Given source $s \in V$ and maximum depth $k$:
+  1. Initialize stack $Q \leftarrow [(s, 0)]$, visited set $S \leftarrow \{s\}$.
+  2. While $Q \neq \emptyset$:
+     - Inspect top $(u, \text{depth})$. If $\text{depth} \ge k$, pop and backtrack.
+     - Advance down the first unvisited neighbor $v \in N(u) \setminus S$ across unblocked edge $(u, v)$:
+       - $S \leftarrow S \cup \{v\}$
+       - Push $(v, \text{depth} + 1)$ to stack.
+- **Diffusion Model:** Simulates **sequential word-of-mouth chaining** or rumor forwarding where misinformation penetrates deeply along single pathways before backtracking.
 
 ---
 

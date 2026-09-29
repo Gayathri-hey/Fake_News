@@ -37,7 +37,11 @@ from utils.visualization import (
     plot_containment_network,
     plot_comparison_bar_chart
 )
-from algorithms.propagation import simulate_bfs_propagation
+from algorithms.propagation import (
+    simulate_bfs_propagation,
+    simulate_dfs_propagation,
+    simulate_propagation
+)
 from algorithms.pagerank import compute_pagerank
 from algorithms.centrality import compute_betweenness_centrality
 from algorithms.dominating_set import compute_approx_dominating_set
@@ -178,13 +182,21 @@ if "graph_pos" not in st.session_state or set(st.session_state.graph_pos.keys())
 all_nodes = sorted(list(G.nodes()))
 
 st.sidebar.markdown("### 2. Propagation Settings")
+propagation_algo = st.sidebar.selectbox(
+    "Choose Propagation Algorithm",
+    ["BFS (Breadth-First Search)", "DFS (Depth-First Search)"],
+    index=0,
+    help="BFS spreads simultaneously level-by-level (wavefront broadcast); DFS spreads deeply along sequential chain paths (word-of-mouth)."
+)
+algo_type = "DFS" if "DFS" in propagation_algo else "BFS"
+
 default_src_idx = all_nodes.index("User1") if "User1" in all_nodes else 0
 source_user = st.sidebar.selectbox("Select Fake News Source User", all_nodes, index=default_src_idx, help="Initial account where fake news originates")
 
 default_tgt_idx = all_nodes.index("User30") if "User30" in all_nodes else len(all_nodes)-1
 target_user = st.sidebar.selectbox("Select Target User (for Min-Cut)", all_nodes, index=default_tgt_idx, help="Sensitive user/community node to protect via Minimum Cut")
 
-max_steps = st.sidebar.slider("Maximum Propagation Depth (BFS Steps)", min_value=1, max_value=10, value=5, help="Limit number of information cascade hops")
+max_steps = st.sidebar.slider(f"Maximum Propagation Depth ({algo_type} Steps)", min_value=1, max_value=10, value=5, help=f"Limit number of {algo_type} information cascade hops")
 
 st.sidebar.markdown("### 3. Containment Strategy")
 containment_strategy = st.sidebar.selectbox(
@@ -336,43 +348,50 @@ with tab_gdata:
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# SECTION D: FAKE NEWS PROPAGATION (ALGORITHM 1: BFS)
+# SECTION D: FAKE NEWS PROPAGATION (ALGORITHM 1: BFS / DFS)
 # -----------------------------------------------------------------------------
-st.markdown('<div class="section-header">3. Algorithm 1 — Breadth-First Search (BFS) Fake News Propagation</div>', unsafe_allow_html=True)
+algo_full_title = "Breadth-First Search (BFS)" if algo_type == "BFS" else "Depth-First Search (DFS)"
+st.markdown(f'<div class="section-header">3. Algorithm 1 — {algo_full_title} Fake News Propagation</div>', unsafe_allow_html=True)
 
-# Run Baseline BFS Propagation
-bfs_result = simulate_bfs_propagation(G, source=source_user, max_steps=max_steps)
+if algo_type == "BFS":
+    st.info("🌐 **BFS Exploration:** Simulates concurrent, epidemic broadcasting where misinformation infects all direct neighbors simultaneously at each hop level.")
+else:
+    st.info("🌲 **DFS Exploration:** Simulates sequential word-of-mouth rumor chaining where misinformation penetrates deeply along single pathways before backtracking.")
+
+# Run Baseline Propagation (BFS or DFS based on user dropdown selection)
+prop_result = simulate_propagation(G, source=source_user, algorithm=algo_type, max_steps=max_steps)
 
 col_bfs1, col_bfs2, col_bfs3, col_bfs4 = st.columns(4)
-col_bfs1.metric("Total Users", bfs_result['total_users'])
-col_bfs2.metric("Affected Users", f"{bfs_result['affected_count']} ({bfs_result['propagation_percentage']}%)")
-col_bfs3.metric("Unaffected Protected Users", bfs_result['unaffected_count'])
-col_bfs4.metric("Cascade Depth Reached", f"Level {bfs_result['max_level']} of {max_steps}")
+col_bfs1.metric("Total Users", prop_result['total_users'])
+col_bfs2.metric("Affected Users", f"{prop_result['affected_count']} ({prop_result['propagation_percentage']}%)")
+col_bfs3.metric("Unaffected Protected Users", prop_result['unaffected_count'])
+col_bfs4.metric("Cascade Depth Reached", f"Level {prop_result['max_level']} of {max_steps}")
 
 col_bfsviz, col_bfstbl = st.columns([1.6, 1])
 
 with col_bfsviz:
-    fig_bfs = plot_propagation_graph(
+    fig_prop = plot_propagation_graph(
         G,
         pos=st.session_state.graph_pos,
         source=source_user,
-        levels=bfs_result['levels'],
-        title=f"BFS Fake News Cascade from Source: {source_user} (Max Depth: {max_steps})"
+        levels=prop_result['levels'],
+        propagation_edges=prop_result.get('propagation_edges', None),
+        title=f"{algo_type} Fake News Cascade from Source: {source_user} (Max Depth: {max_steps})"
     )
-    st.pyplot(fig_bfs)
-    plt.close(fig_bfs)
+    st.pyplot(fig_prop)
+    plt.close(fig_prop)
 
 with col_bfstbl:
-    st.markdown("#### Level-by-Level Propagation Order")
-    for lvl in range(bfs_result['max_level'] + 1):
-        users_in_lvl = bfs_result['level_groups'].get(lvl, [])
+    st.markdown(f"#### {algo_type} Step-by-Step Propagation Order")
+    for lvl in range(prop_result['max_level'] + 1):
+        users_in_lvl = prop_result['level_groups'].get(lvl, [])
         if lvl == 0:
-            st.markdown(f"**Time 0 (Origin):** `{', '.join(users_in_lvl)}`")
+            st.markdown(f"**Origin (Step 0):** `{', '.join(users_in_lvl)}`")
         else:
-            st.markdown(f"**Time {lvl} (Hop {lvl}):** `{', '.join(users_in_lvl)}`")
+            st.markdown(f"**Depth {lvl} (Step {lvl}):** `{', '.join(users_in_lvl)}`")
             
     with st.expander("📋 View Full Affected Users List"):
-        st.write(bfs_result['affected_users'])
+        st.write(prop_result['affected_users'])
 
 st.markdown("---")
 
@@ -530,18 +549,19 @@ elif containment_strategy.startswith("D."):
     strategy_name = f"Minimum Cut Edge Severing ({source_user} ➔ {target_user})"
     severed_edges = min_cut_res.get('critical_edges', [])
 
-# Re-run BFS Propagation on the contained graph
-bfs_after = simulate_bfs_propagation(
+# Re-run Propagation on the contained graph (using chosen algorithm: BFS or DFS)
+prop_after = simulate_propagation(
     G,
     source=source_user,
+    algorithm=algo_type,
     max_steps=max_steps,
     blocked_nodes=blocked_nodes,
     blocked_edges=severed_edges
 )
 
 # Calculate Propagation Reduction
-affected_before = bfs_result['affected_count']
-affected_after = bfs_after['affected_count']
+affected_before = prop_result['affected_count']
+affected_after = prop_after['affected_count']
 
 if affected_before > 0:
     reduction_pct = round(((affected_before - affected_after) / affected_before) * 100, 2)
@@ -554,6 +574,7 @@ reduction_pct = max(0.0, reduction_pct)
 # Display Containment Summary Banner
 st.success(f"### Active Strategy: {strategy_name}")
 st.markdown(f"""
+- **Propagation Model Selected:** `{algo_full_title}`
 - **Intervention Applied:** Blocked Users: `{blocked_nodes if blocked_nodes else 'None'}` | Severed Edges: `{severed_edges if severed_edges else 'None'}`
 - **Propagation Reduction Achieved:** **`{reduction_pct}%`** reduction in misinformation spread!
 """)
@@ -568,14 +589,14 @@ comp_col1.metric(
 )
 comp_col2.metric(
     "Protected / Unaffected Users",
-    f"{bfs_after['unaffected_count']} Users",
-    delta=f"+{bfs_after['unaffected_count'] - bfs_result['unaffected_count']} (Saved)",
+    f"{prop_after['unaffected_count']} Users",
+    delta=f"+{prop_after['unaffected_count'] - prop_result['unaffected_count']} (Saved)",
     delta_color="normal"
 )
 comp_col3.metric(
     "Max Spread Depth",
-    f"Level {bfs_after['max_level']}",
-    delta=f"{bfs_after['max_level'] - bfs_result['max_level']} levels",
+    f"Level {prop_after['max_level']}",
+    delta=f"{prop_after['max_level'] - prop_result['max_level']} levels",
     delta_color="inverse"
 )
 comp_col4.metric(
@@ -595,14 +616,14 @@ with col_v1:
         source=source_user,
         blocked_nodes=blocked_nodes,
         cut_edges=severed_edges,
-        affected_after=bfs_after['affected_users'],
+        affected_after=prop_after['affected_users'],
         title=f"Network State After Containment ({strategy_name})"
     )
     st.pyplot(fig_cont)
     plt.close(fig_cont)
 
 with col_v2:
-    fig_bar = plot_comparison_bar_chart(bfs_result, bfs_after)
+    fig_bar = plot_comparison_bar_chart(prop_result, prop_after)
     st.pyplot(fig_bar)
     plt.close(fig_bar)
 
@@ -610,27 +631,31 @@ with col_v2:
 st.markdown("#### Comparative Metric Evaluation Matrix")
 comparison_df = pd.DataFrame({
     "Performance Metric": [
+        "Propagation Algorithm",
         "Affected Users (Infected)",
         "Unaffected Users (Protected)",
         "Propagation Cascade Depth",
         "Network Infection Rate (%)"
     ],
     "Before Containment": [
-        bfs_result['affected_count'],
-        bfs_result['unaffected_count'],
-        f"Level {bfs_result['max_level']}",
-        f"{bfs_result['propagation_percentage']}%"
+        algo_type,
+        prop_result['affected_count'],
+        prop_result['unaffected_count'],
+        f"Level {prop_result['max_level']}",
+        f"{prop_result['propagation_percentage']}%"
     ],
     "After Containment": [
-        bfs_after['affected_count'],
-        bfs_after['unaffected_count'],
-        f"Level {bfs_after['max_level']}",
-        f"{bfs_after['propagation_percentage']}%"
+        algo_type,
+        prop_after['affected_count'],
+        prop_after['unaffected_count'],
+        f"Level {prop_after['max_level']}",
+        f"{prop_after['propagation_percentage']}%"
     ],
     "Containment Impact": [
+        f"Configured ({algo_type})",
         f"Saved {affected_before - affected_after} users",
-        f"Increased by {bfs_after['unaffected_count'] - bfs_result['unaffected_count']} users",
-        f"Halted at level {bfs_after['max_level']}",
+        f"Increased by {prop_after['unaffected_count'] - prop_result['unaffected_count']} users",
+        f"Halted at level {prop_after['max_level']}",
         f"{reduction_pct}% Reduction"
     ]
 })

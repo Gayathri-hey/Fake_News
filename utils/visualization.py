@@ -62,9 +62,9 @@ def plot_social_network(G: nx.Graph, pos=None, title="Social Network Architectur
     return fig, pos
 
 
-def plot_propagation_graph(G: nx.Graph, pos: dict, source: str, levels: dict, title="Fake News Propagation (BFS Levels)"):
+def plot_propagation_graph(G: nx.Graph, pos: dict, source: str, levels: dict, title="Fake News Propagation Levels", propagation_edges=None):
     """
-    Visualizes the BFS information spread.
+    Visualizes the BFS or DFS information spread.
     - Source: Bright Crimson / Red
     - Level 1: Dark Orange
     - Level 2: Amber / Yellow
@@ -133,11 +133,17 @@ def plot_propagation_graph(G: nx.Graph, pos: dict, source: str, levels: dict, ti
         )
         
     # Highlight active propagation tree edges
-    tree_edges = []
-    for u, v in G.edges():
-        if u in levels and v in levels:
-            if abs(levels[u] - levels[v]) == 1:
-                tree_edges.append((u, v))
+    if propagation_edges:
+        tree_edges = [
+            (u, v) for u, v in propagation_edges
+            if u in G.nodes and v in G.nodes and G.has_edge(u, v)
+        ]
+    else:
+        tree_edges = []
+        for u, v in G.edges():
+            if u in levels and v in levels:
+                if abs(levels[u] - levels[v]) == 1:
+                    tree_edges.append((u, v))
                 
     if tree_edges:
         nx.draw_networkx_edges(
